@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import Markdown from './Markdown'
+import { ArrowUp, Check, Copy, Gpu, LogOut, PanelLeft, Plus, Spark, Stop, Trash } from './Icons'
+import { HARDWARE, MODEL_NAME, ModelChip, TOY_NOTICE } from './ModelInfo'
 import { AuthError, countTokens, streamChat } from './api'
 import { loadConversations, saveConversations } from './storage'
 import type { Conversation, Message } from './types'
@@ -10,6 +12,14 @@ const MAX_REPLY_TOKENS = 1024
 const PROMPT_BUDGET = SLOT_CONTEXT - MAX_REPLY_TOKENS - 96
 
 const uid = () => crypto.randomUUID()
+
+function timeGreeting(): string {
+  const h = new Date().getHours()
+  if (h < 5) return 'Hello, night owl'
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
 
 /** Drops the oldest turns until the prompt fits in one server slot. Always keeps the latest message. */
 async function fitHistory(baseUrl: string, key: string, history: Message[]): Promise<Message[]> {
@@ -36,6 +46,8 @@ export default function Chat({ baseUrl, apiKey, onLogout }: Props) {
   const [generating, setGenerating] = useState(false)
   const [waiting, setWaiting] = useState(false)
   const [sidebar, setSidebar] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
+  const [greeting] = useState(timeGreeting)
   const abortRef = useRef<AbortController | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -146,17 +158,33 @@ export default function Chat({ baseUrl, apiKey, onLogout }: Props) {
   }
 
   const sorted = useMemo(() => [...convos].sort((a, b) => b.updatedAt - a.updatedAt), [convos])
+  const isEmpty = !active || active.messages.length === 0
 
   return (
-    <div className="app">
+    <div className={`app ${collapsed ? 'collapsed' : ''}`}>
       <aside className={`sidebar ${sidebar ? 'open' : ''}`}>
         <div className="sidebar-head">
-          <span className="brand">Artifact 3</span>
+          <span className="brand">
+            <Spark />
+            <span className="brand-name">Artifact 3</span>
+          </span>
+          <button
+            className="icon desktop-only"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            onClick={() => setCollapsed((c) => !c)}
+          >
+            <PanelLeft />
+          </button>
         </div>
-        <button className="new-chat" onClick={newChat}>
-          + New chat
+        <button className="new-chat" onClick={newChat} title="New chat">
+          <span className="new-chat-dot">
+            <Plus width={16} height={16} />
+          </span>
+          <span className="new-chat-label">New chat</span>
         </button>
         <nav className="convos" aria-label="Conversations">
+          {sorted.length > 0 && <h3 className="convos-head">Recents</h3>}
           {sorted.map((c) => (
             <div key={c.id} className={`convo ${c.id === activeId ? 'active' : ''}`}>
               <button
@@ -168,80 +196,134 @@ export default function Chat({ baseUrl, apiKey, onLogout }: Props) {
               >
                 {c.title}
               </button>
-              <button className="convo-del" aria-label={`Delete ${c.title}`} onClick={() => remove(c.id)}>
-                ×
+              <button className="convo-del" aria-label={`Delete ${c.title}`} title="Delete" onClick={() => remove(c.id)}>
+                <Trash width={16} height={16} />
               </button>
             </div>
           ))}
         </nav>
-        <button className="link logout" onClick={onLogout}>
-          Log out
-        </button>
+        <div className="sidebar-foot">
+          <span className="host-badge" title={TOY_NOTICE}>
+            <Gpu />
+          </span>
+          <span className="host-text">
+            <span className="host-name">{MODEL_NAME}</span>
+            <span className="host-sub">Toy model on an {HARDWARE}</span>
+          </span>
+          <button className="icon" aria-label="Log out" title="Log out" onClick={onLogout}>
+            <LogOut width={18} height={18} />
+          </button>
+        </div>
       </aside>
       {sidebar && <div className="scrim" onClick={() => setSidebar(false)} />}
 
-      <main className="main">
+      <main className={`main ${isEmpty ? 'is-empty' : ''}`}>
         <header className="topbar">
-          <button className="icon" aria-label="Open sidebar" onClick={() => setSidebar(true)}>
-            ☰
+          <button className="icon mobile-only" aria-label="Open sidebar" onClick={() => setSidebar(true)}>
+            <PanelLeft />
           </button>
-          <span className="topbar-title">{active?.title ?? 'New chat'}</span>
+          <span className="topbar-title">{active?.title ?? ''}</span>
+          <button className="icon mobile-only" aria-label="New chat" onClick={newChat}>
+            <Plus />
+          </button>
         </header>
 
-        <div className="scroll">
-          {!active || active.messages.length === 0 ? (
-            <div className="empty">
-              <div className="logo">A</div>
-              <h2>How can I help you today?</h2>
-            </div>
-          ) : (
+        {isEmpty ? (
+          <div className="hero">
+            <p className="toy-badge">
+              <Gpu />
+              {TOY_NOTICE}
+            </p>
+            <h1 className="greeting">
+              <Spark />
+              {greeting}
+            </h1>
+          </div>
+        ) : (
+          <div className="scroll">
             <div className="thread">
               {active.messages.map((m, i) => {
                 const last = i === active.messages.length - 1
+                const streaming = last && generating
                 return (
                   <div key={m.id} className={`msg ${m.role}`}>
                     {m.role === 'user' ? (
                       <div className="bubble">{m.content}</div>
-                    ) : m.error ? (
-                      <p className="error">{m.content}</p>
-                    ) : m.content ? (
-                      <Markdown text={m.content} />
-                    ) : last && generating ? (
-                      <p className="muted pulse">{waiting ? 'Waiting for a free slot…' : 'Thinking…'}</p>
-                    ) : null}
+                    ) : (
+                      <>
+                        {m.error ? (
+                          <p className="error">{m.content}</p>
+                        ) : m.content ? (
+                          <Markdown text={m.content} />
+                        ) : streaming ? (
+                          <p className="status">
+                            <Spark className="msg-spark busy" />
+                            <span>{waiting ? 'Waiting for a free slot on the GPU…' : 'Thinking…'}</span>
+                          </p>
+                        ) : null}
+                        {last && (m.content || !streaming) && <Spark className={`msg-spark ${streaming ? 'busy' : ''}`} />}
+                        {!streaming && m.content && !m.error && <CopyButton text={m.content} />}
+                      </>
+                    )}
                   </div>
                 )
               })}
               <div ref={endRef} />
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="composer-wrap">
           <div className="composer">
             <textarea
               ref={taRef}
-              rows={1}
+              rows={isEmpty ? 2 : 1}
               autoFocus
-              placeholder="Message Artifact 3"
+              placeholder={isEmpty ? 'How can I help you today?' : 'Reply to Artifact 3…'}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
               aria-label="Message"
             />
-            {generating ? (
-              <button className="send stop" onClick={stop} aria-label="Stop generating">
-                ■
-              </button>
-            ) : (
-              <button className="send" onClick={() => void send()} disabled={!input.trim()} aria-label="Send">
-                ↑
-              </button>
-            )}
+            <div className="composer-bar">
+              <ModelChip />
+              {generating ? (
+                <button className="send stop" onClick={stop} aria-label="Stop generating" title="Stop">
+                  <Stop />
+                </button>
+              ) : (
+                <button className="send" onClick={() => void send()} disabled={!input.trim()} aria-label="Send">
+                  <ArrowUp width={18} height={18} />
+                </button>
+              )}
+            </div>
           </div>
-          <p className="footnote">Responses are generated by an AI model and may contain mistakes.</p>
+          <p className="footnote">
+            Artifact 3 is a small toy model running on one {HARDWARE} at home. It makes mistakes, so double-check
+            anything important.
+          </p>
         </div>
       </main>
+    </div>
+  )
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+  return (
+    <div className="msg-actions">
+      <button className="icon" onClick={copy} aria-label={copied ? 'Copied' : 'Copy response'} title="Copy">
+        {copied ? <Check width={16} height={16} /> : <Copy width={16} height={16} />}
+      </button>
     </div>
   )
 }

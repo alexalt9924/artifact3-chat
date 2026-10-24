@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { verifyKey } from './api'
 import { defaultApiUrl, loadApiUrl, saveApiUrl, saveKey } from './storage'
+import { Gpu, Spark } from './Icons'
+import { HARDWARE, MODEL_NAME } from './ModelInfo'
 
 export default function Login({ onLogin }: { onLogin: (baseUrl: string, key: string) => void }) {
   const [password, setPassword] = useState('')
@@ -36,13 +38,17 @@ export default function Login({ onLogin }: { onLogin: (baseUrl: string, key: str
   return (
     <main className="login">
       <form className="login-card" onSubmit={submit}>
-        <div className="logo">A</div>
+        <Spark className="login-mark" />
         <h1>Artifact 3</h1>
-        <p className="muted">Enter the password to start chatting.</p>
+        <p className="login-sub">Chat with {MODEL_NAME}, a small open model hosted at home.</p>
+        <p className="toy-badge">
+          <Gpu />
+          Toy model running locally on an {HARDWARE}
+        </p>
         <input
           type="password"
           autoFocus
-          placeholder="Password"
+          placeholder="Enter the shared password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           aria-label="Password"
