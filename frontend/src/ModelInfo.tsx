@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Gpu } from './Icons'
+import { usePopover } from './usePopover'
 
 // What's actually serving requests. Keep in sync with artifact/.env (MODEL_FILE, PARALLEL_SLOTS, TOTAL_CONTEXT).
 export const MODEL_NAME = 'Gemma 4 E4B'
@@ -8,21 +8,7 @@ export const TOY_NOTICE = `A toy model running locally on one ${HARDWARE}`
 
 /** Composer model picker, Claude-style. There's only one model, so the menu explains what it is. */
 export function ModelChip() {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', close)
-    document.addEventListener('keydown', close)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      document.removeEventListener('keydown', close)
-    }
-  }, [open])
+  const { open, setOpen, ref } = usePopover()
 
   return (
     <div className="model" ref={ref}>
@@ -37,7 +23,7 @@ export function ModelChip() {
         <ChevronDown />
       </button>
       {open && (
-        <div className="model-menu" role="dialog" aria-label="About this model">
+        <div className="popover model-menu" role="dialog" aria-label="About this model">
           <div className="model-item">
             <div>
               <div className="model-item-name">{MODEL_NAME}</div>
@@ -54,9 +40,7 @@ export function ModelChip() {
               <dt>Weights</dt>
               <dd>4-bit (Q4_K_M)</dd>
               <dt>Memory</dt>
-              <dd>About 4,000 tokens per chat</dd>
-              <dt>Sharing</dt>
-              <dd>8 people at once, others wait</dd>
+              <dd>4,096 tokens per chat</dd>
             </dl>
           </div>
         </div>

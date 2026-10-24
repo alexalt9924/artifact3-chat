@@ -27,29 +27,45 @@ export async function verifyKey(baseUrl: string, key: string): Promise<void> {
   if (!res.ok) throw new Error(`Server returned ${res.status}`)
 }
 
-export async function countTokens(baseUrl: string, key: string, text: string): Promise<number> {
+type ChatMessage = Pick<Message, 'role' | 'content'>
+
+/**
+ * Exact prompt size for a conversation: renders it through the model's chat template, then tokenizes.
+ * Falls back to a deliberately high estimate if the server can't be asked, so limits err on the safe side.
+ */
+export async function countChatTokens(baseUrl: string, key: string, messages: ChatMessage[]): Promise<number> {
   try {
-    const res = await fetch(`${baseUrl}/tokenize`, {
+    const tpl = await fetch(`${baseUrl}/apply-template`, {
       method: 'POST',
       headers: headers(key),
-      body: JSON.stringify({ content: text }),
+      body: JSON.stringify({ messages }),
     })
-    if (res.ok) return (await res.json()).tokens.length
+    if (tpl.ok) {
+      const { prompt } = await tpl.json()
+      const res = await fetch(`${baseUrl}/tokenize`, {
+        method: 'POST',
+        headers: headers(key),
+        body: JSON.stringify({ content: prompt }),
+      })
+      if (res.ok) return (await res.json()).tokens.length
+    }
   } catch {
     /* fall through to estimate */
   }
-  return Math.ceil(text.length / 3)
+  return messages.reduce((n, m) => n + Math.ceil(m.content.length / 3) + 8, 4)
 }
 
 interface StreamOpts {
   baseUrl: string
   key: string
-  messages: Pick<Message, 'role' | 'content'>[]
+  messages: ChatMessage[]
   maxTokens: number
   signal: AbortSignal
   onToken: (t: string) => void
   /** Fires for chain-of-thought tokens when the server has reasoning enabled. */
   onReasoning?: () => void
+  /** Why generation ended: 'stop' normally, 'length' when it hit max_tokens. */
+  onFinish?: (reason: string) => void
 }
 
 /** Streams a chat completion over SSE. Resolves when the stream ends. */
@@ -91,9 +107,11 @@ export async function streamChat(o: StreamOpts): Promise<void> {
       const data = line.slice(5).trim()
       if (data === '[DONE]') return
       try {
-        const delta = JSON.parse(data).choices?.[0]?.delta
+        const choice = JSON.parse(data).choices?.[0]
+        const delta = choice?.delta
         if (delta?.content) o.onToken(delta.content)
         else if (delta?.reasoning_content) o.onReasoning?.()
+        if (choice?.finish_reason) o.onFinish?.(choice.finish_reason)
       } catch {
         /* partial or non-JSON line */
       }
