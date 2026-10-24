@@ -1,0 +1,7 @@
+artifact/weights/
+**/.env
+!**/.env.example
+node_modules
+dist
+artifact/
+cloudflare/
