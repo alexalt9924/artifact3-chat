@@ -10,7 +10,6 @@ import type { Conversation, Message } from './types'
 // Must match the server: TOTAL_CONTEXT / PARALLEL_SLOTS (32768 / 8 by default).
 // Prompt + reply must never exceed this, or the server's behavior is undefined.
 const SLOT_CONTEXT = 4096
-const MAX_REPLY_TOKENS = 1024
 // A message can only be sent if it leaves at least this much room for the answer.
 const REPLY_RESERVE = 512
 // Slack for any count drift between the client and server.
@@ -132,7 +131,8 @@ export default function Chat({ baseUrl, apiKey, onLogout }: Props) {
       setDraftTotal(promptTokens)
       return
     }
-    const maxTokens = Math.min(MAX_REPLY_TOKENS, SLOT_CONTEXT - promptTokens - SAFETY)
+    // No separate reply cap: the answer may use whatever room is left in the slot.
+    const maxTokens = SLOT_CONTEXT - promptTokens - SAFETY
 
     const userMsg: Message = { id: uid(), role: 'user', content: text }
     const botMsg: Message = { id: uid(), role: 'assistant', content: '' }
@@ -174,10 +174,7 @@ export default function Chat({ baseUrl, apiKey, onLogout }: Props) {
           patchMessage(conversationId, botMsg.id, (m) => ({ ...m, content: m.content + t }))
         },
         onFinish: (reason) => {
-          if (reason === 'length') {
-            const cutOff = maxTokens < MAX_REPLY_TOKENS ? 'context' : 'reply'
-            patchMessage(conversationId, botMsg.id, (m) => ({ ...m, cutOff }))
-          }
+          if (reason === 'length') patchMessage(conversationId, botMsg.id, (m) => ({ ...m, cutOff: true }))
         },
       })
     } catch (err) {
@@ -329,11 +326,7 @@ export default function Chat({ baseUrl, apiKey, onLogout }: Props) {
                           </p>
                         ) : null}
                         {m.cutOff && (
-                          <p className="msg-note">
-                            {m.cutOff === 'context'
-                              ? 'Reply cut off: this chat ran out of room.'
-                              : `Reply cut off at the ${MAX_REPLY_TOKENS.toLocaleString('en-US')}-token reply limit.`}
-                          </p>
+                          <p className="msg-note">Reply cut off: this chat ran out of room.</p>
                         )}
                         {last && (m.content || !streaming) && <Spark className={`msg-spark ${streaming ? 'busy' : ''}`} />}
                         {!streaming && m.content && !m.error && <CopyButton text={m.content} />}

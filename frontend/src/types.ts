@@ -5,8 +5,8 @@ export interface Message {
   role: Role
   content: string
   error?: boolean
-  /** Set when the reply hit a token limit: the per-reply cap, or the end of the chat's context window. */
-  cutOff?: 'reply' | 'context'
+  /** Set when the reply stopped because the chat's context window ran out. */
+  cutOff?: boolean
 }
 
 export interface Conversation {
