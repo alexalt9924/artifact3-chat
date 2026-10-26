@@ -17,7 +17,7 @@ The finetune changes how the model talks, and getting it to behave in a chat app
 - That format puts the system prompt inside the first user message, so the model copied the prompt's markdown style
   into its replies. The system prompt was rewritten in plain text, which removed nearly all of it.
 - It still sometimes uses emoji, recites part of its prompt, or calls itself by a different name.
-- It is not safety-tuned and is often wrong. Treat it as a toy to experiment with.
+- It is not safety-tuned and is often wrong.
 
 ## Frontend
 - Vite + React 19 + TypeScript, built to static files and deployed to GitHub Pages by GitHub Actions
