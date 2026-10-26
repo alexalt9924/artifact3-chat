@@ -40,7 +40,7 @@ export default function Login({ onLogin }: { onLogin: (baseUrl: string, key: str
       <form className="login-card" onSubmit={submit}>
         <Spark className="login-mark" />
         <h1>Artifact 3</h1>
-        <p className="login-sub">Chat with {MODEL_NAME}, a small open model hosted at home.</p>
+        <p className="login-sub">Chat with {MODEL_NAME}, an experimental model hosted at home.</p>
         <p className="toy-badge">
           <Gpu />
           Toy model running locally on an {HARDWARE}
